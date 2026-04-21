@@ -1,0 +1,18 @@
+# Virtual Environment
+venv/
+env/
+movie_rec_env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Model files
+*.pkl
+*.joblib
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# System files
+.DS_Store

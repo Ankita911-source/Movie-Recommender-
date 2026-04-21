@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CineMatch — Movie Recommender</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #12121a;
+      --card:      #1a1a26;
+      --border:    #2a2a3d;
+      --accent:    #e8c56d;
+      --accent2:   #c9516e;
+      --text:      #e8e8f0;
+      --muted:     #6b6b8a;
+      --glow:      rgba(232,197,109,0.18);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── NOISE GRAIN ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 1000; opacity: 0.45;
+    }
+
+    /* ── HERO HEADER ── */
+    header {
+      position: relative;
+      padding: 60px 40px 40px;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      top: -80px; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 260px;
+      background: radial-gradient(ellipse, rgba(232,197,109,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      letter-spacing: 0.06em;
+      line-height: 1;
+      background: linear-gradient(135deg, var(--accent) 0%, #fff 55%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .tagline {
+      font-size: 0.95rem;
+      font-weight: 300;
+      color: var(--muted);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 6px;
+    }
+
+    /* ── SEARCH SECTION ── */
+    .search-wrap {
+      max-width: 760px;
+      margin: 52px auto 0;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .search-label {
+      font-size: 0.8rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 18px;
+      display: block;
+    }
+    .input-row {
+      display: flex;
+      gap: 12px;
+      position: relative;
+    }
+    .input-row input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 22px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+    .input-row input::placeholder { color: var(--muted); }
+    .input-row input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--glow);
+    }
+    .btn-recommend {
+      background: var(--accent);
+      color: #0a0a0f;
+      border: none;
+      border-radius: 6px;
+      padding: 16px 32px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+      white-space: nowrap;
+    }
+    .btn-recommend:hover {
+      background: #f0d080;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(232,197,109,0.3);
+    }
+    .btn-recommend:active { transform: translateY(0); }
+    .btn-recommend:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── SUGGESTIONS DROPDOWN ── */
+    .suggestions {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      right: 116px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      z-index: 999;
+      display: none;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .suggestions.visible { display: block; }
+    .suggestion-item {
+      padding: 12px 18px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: var(--border); }
+    .suggestion-item mark {
+      background: none;
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ── STATUS / LOADER ── */
+    .status {
+      margin-top: 22px;
+      min-height: 24px;
+      font-size: 0.9rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .loader {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RESULTS ── */
+    .results-section {
+      max-width: 1100px;
+      margin: 60px auto 80px;
+      padding: 0 24px;
+    }
+    .results-header {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 36px;
+    }
+    .results-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2rem;
+      letter-spacing: 0.06em;
+      color: var(--text);
+    }
+    .results-movie-name {
+      color: var(--accent);
+    }
+    .results-count {
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 24px;
+    }
+    .movie-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: default;
+      transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+      animation: cardIn 0.45s ease both;
+    }
+    .movie-card:hover {
+      transform: translateY(-6px);
+      border-color: var(--accent);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px var(--accent);
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .movie-card:nth-child(1) { animation-delay: 0.05s; }
+    .movie-card:nth-child(2) { animation-delay: 0.12s; }
+    .movie-card:nth-child(3) { animation-delay: 0.19s; }
+    .movie-card:nth-child(4) { animation-delay: 0.26s; }
+    .movie-card:nth-child(5) { animation-delay: 0.33s; }
+
+    .card-poster {
+      width: 100%;
+      aspect-ratio: 2/3;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 3rem;
+      color: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .card-poster img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-rank {
+      position: absolute;
+      top: 10px; left: 10px;
+      background: var(--accent);
+      color: #0a0a0f;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+    .card-body {
+      padding: 14px 14px 18px;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 500;
+      line-height: 1.4;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .card-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    .empty-icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      opacity: 0.4;
+    }
+    .empty-state h3 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.8rem;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      opacity: 0.5;
+      margin-bottom: 10px;
+    }
+    .empty-state p { font-size: 0.9rem; font-weight: 300; }
+
+    /* ── ERROR ── */
+    .error-msg {
+      background: rgba(201, 81, 110, 0.12);
+      border: 1px solid rgba(201, 81, 110, 0.3);
+      border-radius: 6px;
+      padding: 14px 20px;
+      font-size: 0.9rem;
+      color: #e07090;
+      margin-top: 20px;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 56px 0 48px;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      header { padding: 40px 20px 28px; }
+      .search-wrap { padding: 0 16px; }
+      .input-row { flex-direction: column; }
+      .suggestions { right: 0; }
+      .btn-recommend { width: 100%; }
+      .cards-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">CineMatch</div>
+    <div class="tagline">AI-Powered Movie Recommendations</div>
+  </header>
+
+  <!-- SEARCH -->
+  <div class="search-wrap">
+    <span class="search-label">Enter a movie you love</span>
+    <div class="input-row" style="position:relative;">
+      <input
+        type="text"
+        id="movieInput"
+        placeholder="e.g. Avatar, Batman Begins, Spectre…"
+        autocomplete="off"
+      />
+      <div class="suggestions" id="suggestions"></div>
+      <button class="btn-recommend" id="recommendBtn" onclick="getRecommendations()">
+        Find Films
+      </button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results-section" id="resultsSection">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">🎬</div>
+      <h3>Your Picks Await</h3>
+      <p>Type a movie title above and discover 5 films you'll love.</p>
+    </div>
+    <div id="resultsContainer" style="display:none;">
+      <div class="results-header">
+        <span class="results-title">Because you liked <span class="results-movie-name" id="likedMovie"></span></span>
+        <span class="results-count" id="resultsCount"></span>
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://127.0.0.1:5000';
+
+    const input       = document.getElementById('movieInput');
+    const suggestBox  = document.getElementById('suggestions');
+    const statusEl    = document.getElementById('status');
+    const errorEl     = document.getElementById('errorMsg');
+    const btn         = document.getElementById('recommendBtn');
+    const emptyState  = document.getElementById('emptyState');
+    const resultsCont = document.getElementById('resultsContainer');
+    const likedMovie  = document.getElementById('likedMovie');
+    const resultsCount= document.getElementById('resultsCount');
+    const cardsGrid   = document.getElementById('cardsGrid');
+
+    let allMovies   = [];
+    let debounceTimer;
+
+    // Fetch all movie titles for autocomplete
+    async function loadMovieTitles() {
+      try {
+        const res  = await fetch(`${API_BASE}/movies`);
+        const data = await res.json();
+        allMovies  = data.movies || [];
+      } catch (e) {
+        console.warn('Could not load movie list — autocomplete disabled.');
+      }
+    }
+    loadMovieTitles();
+
+    // Autocomplete
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => showSuggestions(input.value.trim()), 180);
+    });
+
+    function showSuggestions(query) {
+      if (!query || query.length < 2) { hideSuggestions(); return; }
+      const q = query.toLowerCase();
+      const matches = allMovies
+        .filter(m => m.toLowerCase().includes(q))
+        .slice(0, 8);
+
+      if (!matches.length) { hideSuggestions(); return; }
+
+      suggestBox.innerHTML = matches.map(m => {
+        const idx  = m.toLowerCase().indexOf(q);
+        const highlighted =
+          m.slice(0, idx) +
+          '<mark>' + m.slice(idx, idx + query.length) + '</mark>' +
+          m.slice(idx + query.length);
+        return `<div class="suggestion-item" onclick="selectSuggestion('${m.replace(/'/g,"\\'")}')">
+                  ${highlighted}
+                </div>`;
+      }).join('');
+      suggestBox.classList.add('visible');
+    }
+
+    function selectSuggestion(title) {
+      input.value = title;
+      hideSuggestions();
+      getRecommendations();
+    }
+
+    function hideSuggestions() {
+      suggestBox.classList.remove('visible');
+    }
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.input-row')) hideSuggestions();
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') getRecommendations();
+    });
+
+    // ─── MAIN ───
+    async function getRecommendations() {
+      const movie = input.value.trim();
+      if (!movie) { showError('Please enter a movie title.'); return; }
+
+      hideSuggestions();
+      clearError();
+      setStatus('<span class="loader"></span> Finding similar films…');
+      btn.disabled = true;
+      emptyState.style.display  = 'none';
+      resultsCont.style.display = 'none';
+
+      try {
+        const res  = await fetch(`${API_BASE}/recommend`, {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body   : JSON.stringify({ movie })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || data.error) {
+          throw new Error(data.error || 'Something went wrong.');
+        }
+
+        renderResults(movie, data.recommendations);
+        setStatus('');
+      } catch (err) {
+        setStatus('');
+        showError(err.message || 'Could not connect to the server. Make sure app.py is running.');
+        emptyState.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function renderResults(movie, recs) {
+      likedMovie.textContent = movie;
+      resultsCount.textContent = `${recs.length} match${recs.length !== 1 ? 'es' : ''}`;
+      cardsGrid.innerHTML = '';
+
+      recs.forEach((title, i) => {
+        const card = document.createElement('div');
+        card.className = 'movie-card';
+        card.innerHTML = `
+          <div class="card-poster">
+            <span>${getEmoji(i)}</span>
+            <div class="card-rank">#${i + 1}</div>
+          </div>
+          <div class="card-body">
+            <div class="card-title">${title}</div>
+            <div class="card-meta">Recommended</div>
+          </div>`;
+        cardsGrid.appendChild(card);
+      });
+
+      resultsCont.style.display = 'block';
+    }
+
+    function getEmoji(i) {
+      const icons = ['🎬','🎥','🎞️','🎦','📽️'];
+      return icons[i % icons.length];
+    }
+
+    function setStatus(html) { statusEl.innerHTML = html; }
+    function showError(msg)   { errorEl.textContent = msg; errorEl.classList.add('visible'); }
+    function clearError()     { errorEl.classList.remove('visible'); }
+  </script>
+</body>
+</html>
